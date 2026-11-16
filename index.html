@@ -129,10 +129,16 @@
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-4">
             <span class="text-xs font-bold uppercase tracking-wider text-muted">Отслеживать</span>
             <div id="typePicker" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Как отслеживать"></div>
-            <label id="goalWrap" class="hidden flex items-center gap-2 text-sm font-semibold">
+            <div id="goalWrap" class="hidden flex flex-wrap items-center gap-2 text-sm font-semibold">
               <span class="text-muted">цель в день</span>
-              <select id="habitGoal" class="field select"></select>
-            </label>
+              <span class="goal-input">
+                <input id="habitGoalH" type="number" min="0" max="24" inputmode="numeric" class="field goal-num" aria-label="Цель: часы" />
+                <span>ч</span>
+                <input id="habitGoalM" type="number" min="0" max="59" step="5" inputmode="numeric" class="field goal-num" aria-label="Цель: минуты" />
+                <span>мин</span>
+              </span>
+              <div id="habitGoalPresets" class="flex flex-wrap gap-1"></div>
+            </div>
           </div>
         </form>
 
@@ -191,10 +197,16 @@
       <div class="text-xs font-bold uppercase tracking-wider text-muted mt-5">Отслеживать</div>
       <div class="flex flex-wrap items-center gap-3 mt-2">
         <div id="editTypePicker" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Как отслеживать"></div>
-        <label id="editGoalWrap" class="hidden flex items-center gap-2 text-sm font-semibold">
+        <div id="editGoalWrap" class="hidden flex flex-wrap items-center gap-2 text-sm font-semibold">
           <span class="text-muted">цель в день</span>
-          <select id="editGoal" class="field select"></select>
-        </label>
+          <span class="goal-input">
+            <input id="editGoalH" type="number" min="0" max="24" inputmode="numeric" class="field goal-num" aria-label="Цель: часы" />
+            <span>ч</span>
+            <input id="editGoalM" type="number" min="0" max="59" step="5" inputmode="numeric" class="field goal-num" aria-label="Цель: минуты" />
+            <span>мин</span>
+          </span>
+          <div id="editGoalPresets" class="flex flex-wrap gap-1"></div>
+        </div>
       </div>
       <div class="flex gap-3 mt-6">
         <button type="button" id="editDelete" class="pill-btn text-red-500">🗑️ Удалить</button>

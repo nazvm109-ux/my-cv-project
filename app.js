@@ -21,8 +21,8 @@
     check: { label: 'Отметка', icon: '✓', color: '#a78bfa' },
     time: { label: 'Время', icon: '⏱', color: '#60a5fa' },
   };
-  // Варианты дневной цели для «времени», в минутах
-  const GOALS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240];
+  // Быстрые варианты дневной цели для «времени», в минутах (можно вписать любую свою)
+  const GOAL_PRESETS = [15, 30, 45, 60, 90, 120];
   const QUICK_ADD = [5, 15, 30, 60];
 
   // [минимальный уровень, название, иконка]
@@ -337,8 +337,46 @@
       )
       .join('');
 
-  const goalOptions = (selected) =>
-    GOALS.map((g) => `<option value="${g}" ${g === selected ? 'selected' : ''}>${fmtMin(g)}</option>`).join('');
+  // Поле цели: часы + минуты. prefix — 'habitGoal' (форма) или 'editGoal' (окно изменения)
+  function readGoal(prefix) {
+    const h = parseInt($(`#${prefix}H`).value, 10) || 0;
+    const m = parseInt($(`#${prefix}M`).value, 10) || 0;
+    return Math.max(0, Math.min(24 * 60, h * 60 + m));
+  }
+
+  function renderGoalPresets(prefix) {
+    const cur = readGoal(prefix);
+    $(`#${prefix}Presets`).innerHTML = GOAL_PRESETS.map(
+      (g) => `<button type="button" class="chip chip-sm ${g === cur ? 'active' : ''}" data-goal="${g}" style="--c:#60a5fa">${fmtShort(g)}</button>`,
+    ).join('');
+  }
+
+  function setGoal(prefix, total) {
+    $(`#${prefix}H`).value = Math.floor(total / 60);
+    $(`#${prefix}M`).value = total % 60;
+    renderGoalPresets(prefix);
+  }
+
+  // Проверяет цель; если она нулевая — трясёт поля и возвращает 0
+  function validGoal(prefix) {
+    const goal = readGoal(prefix);
+    if (!goal) {
+      [`#${prefix}H`, `#${prefix}M`].forEach((s) => restartAnimation($(s), 'shake'));
+      $(`#${prefix}M`).focus();
+    }
+    return goal;
+  }
+
+  function bindGoalInput(prefix) {
+    [`#${prefix}H`, `#${prefix}M`].forEach((s) => {
+      $(s).addEventListener('input', () => renderGoalPresets(prefix));
+      $(s).addEventListener('animationend', (e) => e.target.classList.remove('shake'));
+    });
+    $(`#${prefix}Presets`).addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-goal]');
+      if (btn) setGoal(prefix, Number(btn.dataset.goal));
+    });
+  }
 
   function renderCategoryPicker() {
     $('#categoryPicker').innerHTML = chipsHtml(CATEGORIES, ui.newCategory, 'cat');
@@ -715,7 +753,7 @@
     ui.editCategory = CATEGORIES[h.category] ? h.category : 'health';
     ui.editType = h.type;
     $('#editName').value = h.name;
-    $('#editGoal').innerHTML = goalOptions(h.goal);
+    setGoal('editGoal', h.goal);
     renderEditCategories();
     openModal('#editModal');
     setTimeout(() => $('#editName').select(), 60);
@@ -731,10 +769,11 @@
       input.focus();
       return;
     }
+    const goal = ui.editType === 'time' ? validGoal('editGoal') : h.goal;
+    if (!goal) return;
     h.name = name;
     h.category = ui.editCategory;
     if (ui.editType === 'time') {
-      const goal = Number($('#editGoal').value) || 30;
       if (h.type !== 'time') {
         // Уже отмеченные дни считаем выполненными: записываем им время, равное цели
         for (const k of h.done) if (!h.minutes[k]) h.minutes[k] = goal;
@@ -806,7 +845,9 @@
         input.focus();
         return;
       }
-      addHabit(name, ui.newCategory, ui.newType, Number($('#habitGoal').value) || 30);
+      const goal = ui.newType === 'time' ? validGoal('habitGoal') : 30;
+      if (!goal) return;
+      addHabit(name, ui.newCategory, ui.newType, goal);
       input.value = '';
     });
     $('#habitName').addEventListener('animationend', (e) => e.target.classList.remove('shake'));
@@ -989,7 +1030,9 @@
   $('#themeIcon').textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
   $('#quote').textContent = `«${QUOTES[Math.floor(Math.random() * QUOTES.length)]}»`;
   setHeaderDate();
-  $('#habitGoal').innerHTML = goalOptions(30);
+  setGoal('habitGoal', 30);
+  bindGoalInput('habitGoal');
+  bindGoalInput('editGoal');
   bindEvents();
   renderAll();
 })();
