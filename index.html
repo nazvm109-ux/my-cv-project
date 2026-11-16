@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HabitFlow — трекер привычек</title>
+  <meta name="description" content="Интерактивный трекер привычек с уровнями, опытом и анимациями." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>" />
+
+  <!-- Тема применяется до отрисовки, чтобы не было вспышки -->
+  <script>
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('habitflow:v1') || '{}');
+        var dark = s.theme ? s.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    if (window.tailwind) {
+      tailwind.config = {
+        darkMode: 'class',
+        theme: { extend: { fontFamily: { sans: ['Manrope', 'system-ui', 'sans-serif'] } } },
+      };
+    }
+  </script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="min-h-screen font-sans antialiased overflow-x-hidden">
+  <!-- Фон -->
+  <div class="grid-bg" aria-hidden="true"></div>
+  <div class="blob blob-1" aria-hidden="true"></div>
+  <div class="blob blob-2" aria-hidden="true"></div>
+  <div class="blob blob-3" aria-hidden="true"></div>
+  <div id="cursorGlow" class="cursor-glow" aria-hidden="true"></div>
+
+  <div class="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+    <!-- Шапка -->
+    <header class="flex items-center justify-between mb-8 animate-in" style="--i: 0">
+      <div class="flex items-center gap-3">
+        <div class="logo" aria-hidden="true">✦</div>
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight gradient-text">HabitFlow</h1>
+          <p class="text-sm text-muted first-letter:uppercase" id="todayLabel"></p>
+        </div>
+      </div>
+      <button id="themeToggle" class="icon-btn glass" aria-label="Сменить тему">
+        <span id="themeIcon" class="theme-icon">🌙</span>
+      </button>
+    </header>
+
+    <div class="grid lg:grid-cols-[340px_minmax(0,1fr)] gap-6 items-start">
+      <!-- Левая колонка: профиль -->
+      <aside class="lg:sticky lg:top-6 space-y-6">
+        <section id="profileCard" class="glass spotlight tilt p-6 animate-in" style="--i: 1">
+          <div class="flex flex-col items-center text-center">
+            <button id="avatarBtn" class="avatar-ring" title="Нажмите, чтобы сменить аватар" aria-label="Сменить аватар">
+              <span class="avatar-inner"><span id="avatar">🦊</span></span>
+              <span class="level-badge" id="levelBadge">1</span>
+            </button>
+            <input id="profileName" class="name-input" maxlength="24" aria-label="Ваше имя" spellcheck="false" />
+            <span id="rankBadge" class="rank-badge">🌱 Новичок</span>
+          </div>
+
+          <div class="mt-6">
+            <div class="flex justify-between items-end mb-2">
+              <span class="text-sm text-muted">Уровень <b id="levelNum" class="text-lg text-main">1</b></span>
+              <span id="xpText" class="text-xs text-muted font-semibold"></span>
+            </div>
+            <div class="xp-track" id="xpTrack"><div class="xp-fill" id="xpFill"></div></div>
+            <p id="nextRank" class="text-xs text-muted mt-2"></p>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 mt-6">
+            <div class="stat-box"><span class="stat-value" id="statTotal">0</span><span class="stat-label">выполнено</span></div>
+            <div class="stat-box"><span class="stat-value" id="statBest">0</span><span class="stat-label">лучшая серия</span></div>
+            <div class="stat-box"><span class="stat-value" id="statXp">0</span><span class="stat-label">всего XP</span></div>
+          </div>
+        </section>
+
+        <section class="glass spotlight p-6 animate-in" style="--i: 2">
+          <div class="flex items-center gap-5">
+            <div class="relative w-24 h-24 shrink-0">
+              <svg viewBox="0 0 80 80" class="w-full h-full -rotate-90">
+                <defs>
+                  <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#a78bfa" />
+                    <stop offset="50%" stop-color="#f472b6" />
+                    <stop offset="100%" stop-color="#fb923c" />
+                  </linearGradient>
+                </defs>
+                <circle cx="40" cy="40" r="34" class="ring-track" />
+                <circle id="todayRing" cx="40" cy="40" r="34" class="ring-fill" stroke="url(#ringGrad)" />
+              </svg>
+              <div class="absolute inset-0 grid place-items-center">
+                <span id="todayPercent" class="text-xl font-extrabold">0%</span>
+              </div>
+            </div>
+            <div class="min-w-0">
+              <h2 class="font-bold text-lg">Сегодня</h2>
+              <p id="todayText" class="text-sm text-muted"></p>
+              <p id="quote" class="text-xs text-muted mt-2 italic"></p>
+            </div>
+          </div>
+          <div class="mt-5">
+            <div class="text-xs text-muted mb-2 font-semibold uppercase tracking-wider">Последние 7 дней</div>
+            <div id="weekChart" class="week-chart"></div>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Правая колонка: привычки -->
+      <main class="space-y-6 min-w-0">
+        <form id="habitForm" class="glass spotlight p-5 sm:p-6 animate-in" style="--i: 2" autocomplete="off">
+          <h2 class="font-bold text-lg mb-3">Новая привычка</h2>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <input id="habitName" class="field flex-1" placeholder="Например: пить 2 литра воды" maxlength="40" aria-label="Название привычки" />
+            <button type="submit" class="btn-primary"><span class="text-lg leading-none">+</span> Добавить</button>
+          </div>
+          <div id="categoryPicker" class="flex flex-wrap gap-2 mt-4" role="radiogroup" aria-label="Категория"></div>
+        </form>
+
+        <div class="glass p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between animate-in" style="--i: 3">
+          <div class="segmented" id="viewToggle" role="tablist">
+            <span class="segmented-indicator" aria-hidden="true"></span>
+            <button type="button" data-view="week" role="tab">Неделя</button>
+            <button type="button" data-view="month" role="tab">Месяц</button>
+          </div>
+          <div class="flex items-center justify-between sm:justify-end gap-2">
+            <button id="prevPeriod" class="icon-btn small" aria-label="Назад">
+              <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+            </button>
+            <span id="periodLabel" class="font-semibold text-sm min-w-[150px] text-center"></span>
+            <button id="nextPeriod" class="icon-btn small" aria-label="Вперёд">
+              <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+            <button id="todayBtn" class="pill-btn">Сегодня</button>
+          </div>
+        </div>
+
+        <div id="filters" class="flex sm:flex-wrap gap-2 overflow-x-auto pb-1 no-scrollbar animate-in" style="--i: 4"></div>
+
+        <div id="habitList" class="space-y-4"></div>
+      </main>
+    </div>
+
+    <footer class="text-center text-xs text-muted mt-14">
+      Данные хранятся только в вашем браузере · HabitFlow
+    </footer>
+  </div>
+
+  <!-- Модалка: подтверждение удаления -->
+  <div id="confirmModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel glass" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="text-4xl mb-3">🗑️</div>
+      <h3 id="confirmTitle" class="text-lg font-bold">Удалить привычку?</h3>
+      <p class="text-sm text-muted mt-1">«<span id="confirmName"></span>» и вся её история будут удалены.</p>
+      <div class="flex gap-3 mt-6">
+        <button class="pill-btn flex-1" data-close>Отмена</button>
+        <button id="confirmDelete" class="btn-danger flex-1">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка: новый уровень -->
+  <div id="levelModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel glass level-panel" role="dialog" aria-modal="true" aria-labelledby="levelTitle">
+      <div class="level-rays" aria-hidden="true"></div>
+      <p class="text-xs uppercase tracking-[0.3em] text-muted font-bold relative">Новый уровень</p>
+      <div id="levelModalNum" class="level-big gradient-text relative">2</div>
+      <h3 id="levelTitle" class="text-xl font-extrabold relative">Так держать! 🎉</h3>
+      <p id="levelModalRank" class="text-sm text-muted mt-1 relative"></p>
+      <button class="btn-primary w-full mt-6 relative" data-close>Продолжить</button>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
