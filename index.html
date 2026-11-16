@@ -171,6 +171,23 @@
     </div>
   </div>
 
+  <!-- Модалка: редактирование привычки -->
+  <div id="editModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <form id="editForm" class="modal-panel glass text-left" role="dialog" aria-modal="true" aria-labelledby="editTitle" autocomplete="off">
+      <h3 id="editTitle" class="text-lg font-bold mb-4">✎ Изменить привычку</h3>
+      <label class="text-xs font-bold uppercase tracking-wider text-muted" for="editName">Название</label>
+      <input id="editName" class="field w-full mt-2" maxlength="40" />
+      <div class="text-xs font-bold uppercase tracking-wider text-muted mt-5">Категория</div>
+      <div id="editCategoryPicker" class="flex flex-wrap gap-2 mt-2" role="radiogroup" aria-label="Категория"></div>
+      <div class="flex gap-3 mt-6">
+        <button type="button" id="editDelete" class="pill-btn text-red-500">🗑️ Удалить</button>
+        <button type="button" class="pill-btn flex-1" data-close>Отмена</button>
+        <button type="submit" class="btn-primary flex-1 !py-2.5">Сохранить</button>
+      </div>
+    </form>
+  </div>
+
   <!-- Модалка: новый уровень -->
   <div id="levelModal" class="modal" aria-hidden="true">
     <div class="modal-backdrop" data-close></div>

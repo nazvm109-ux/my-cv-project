@@ -130,6 +130,8 @@
     filter: 'all',
     newCategory: 'health',
     pendingDelete: null,
+    editing: null,
+    editCategory: 'health',
   };
 
   // ---------- Статистика и опыт ----------
@@ -355,19 +357,24 @@
       <div class="flex items-center gap-3">
         <div class="cat-bubble">${cat.icon}</div>
         <div class="min-w-0 flex-1">
-          <h3 class="font-bold truncate">${esc(h.name)}</h3>
-          <div class="flex items-center gap-2 mt-1 text-xs text-muted font-semibold">
+          <h3 class="font-bold leading-snug line-clamp-2 break-words" title="${esc(h.name)}">${esc(h.name)}</h3>
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-muted font-semibold">
             <span class="cat-tag">${cat.label}</span>
-            <span><span class="flame ${streak ? 'lit' : ''}">🔥</span> ${streak} ${plural(streak, 'день', 'дня', 'дней')}</span>
+            <span class="whitespace-nowrap"><span class="flame ${streak ? 'lit' : ''}">🔥</span> ${streak} ${plural(streak, 'день', 'дня', 'дней')}</span>
           </div>
         </div>
-        <div class="text-right shrink-0">
+        <div class="text-right shrink-0 hidden sm:block">
           <div class="text-lg font-extrabold leading-none">${pct}%</div>
           <div class="text-[10px] text-muted font-semibold mt-1">${state.view === 'week' ? 'за неделю' : 'за месяц'}</div>
         </div>
-        <button type="button" class="delete-btn" data-delete="${h.id}" aria-label="Удалить «${esc(h.name)}»">
-          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-        </button>
+        <div class="card-actions">
+          <button type="button" class="action-btn edit" data-edit="${h.id}" title="Изменить" aria-label="Изменить «${esc(h.name)}»">
+            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+          </button>
+          <button type="button" class="action-btn delete" data-delete="${h.id}" title="Удалить" aria-label="Удалить «${esc(h.name)}»">
+            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
       </div>
       ${grid}
       <div class="mini-bar"><span style="width:${pct}%"></span></div>
@@ -556,6 +563,47 @@
     }
   }
 
+  function renderEditCategories() {
+    $('#editCategoryPicker').innerHTML = Object.entries(CATEGORIES)
+      .map(
+        ([key, c]) => `<button type="button" class="chip ${key === ui.editCategory ? 'active' : ''}"
+          data-cat="${key}" role="radio" aria-checked="${key === ui.editCategory}" style="--c:${c.color}">
+          <span>${c.icon}</span>${c.label}</button>`,
+      )
+      .join('');
+  }
+
+  function openEdit(id) {
+    const h = state.habits.find((x) => x.id === id);
+    if (!h) return;
+    ui.editing = id;
+    ui.editCategory = CATEGORIES[h.category] ? h.category : 'health';
+    $('#editName').value = h.name;
+    renderEditCategories();
+    openModal('#editModal');
+    setTimeout(() => $('#editName').select(), 60);
+  }
+
+  function saveEdit() {
+    const h = state.habits.find((x) => x.id === ui.editing);
+    const input = $('#editName');
+    const name = input.value.trim();
+    if (!h) return;
+    if (!name) {
+      restartAnimation(input, 'shake');
+      input.focus();
+      return;
+    }
+    h.name = name;
+    h.category = ui.editCategory;
+    save();
+    closeModal($('#editModal'));
+    if (ui.filter !== 'all' && ui.filter !== h.category) ui.filter = 'all';
+    renderFilters();
+    renderHabits();
+    toast(`Сохранено: «${name}»`, CATEGORIES[h.category].icon);
+  }
+
   function requestDelete(id) {
     const h = state.habits.find((x) => x.id === id);
     if (!h) return;
@@ -632,6 +680,8 @@
       if (cell && !cell.disabled) return toggleDay(cell.dataset.id, cell.dataset.date, cell);
       const del = e.target.closest('[data-delete]');
       if (del) return requestDelete(del.dataset.delete);
+      const edit = e.target.closest('[data-edit]');
+      if (edit) return openEdit(edit.dataset.edit);
       const sug = e.target.closest('[data-suggest]');
       if (sug) addHabit(sug.dataset.suggest, sug.dataset.catS);
     });
@@ -684,6 +734,23 @@
       }),
     );
     $('#confirmDelete').addEventListener('click', confirmDelete);
+
+    // Редактирование
+    $('#editForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveEdit();
+    });
+    $('#editName').addEventListener('animationend', (e) => e.target.classList.remove('shake'));
+    $('#editCategoryPicker').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-cat]');
+      if (!btn) return;
+      ui.editCategory = btn.dataset.cat;
+      renderEditCategories();
+    });
+    $('#editDelete').addEventListener('click', () => {
+      closeModal($('#editModal'));
+      requestDelete(ui.editing);
+    });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') $$('.modal.open').forEach(closeModal);
     });
