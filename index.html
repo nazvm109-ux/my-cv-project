@@ -126,6 +126,14 @@
             <button type="submit" class="btn-primary"><span class="text-lg leading-none">+</span> Добавить</button>
           </div>
           <div id="categoryPicker" class="flex flex-wrap gap-2 mt-4" role="radiogroup" aria-label="Категория"></div>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mt-4">
+            <span class="text-xs font-bold uppercase tracking-wider text-muted">Отслеживать</span>
+            <div id="typePicker" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Как отслеживать"></div>
+            <label id="goalWrap" class="hidden flex items-center gap-2 text-sm font-semibold">
+              <span class="text-muted">цель в день</span>
+              <select id="habitGoal" class="field select"></select>
+            </label>
+          </div>
         </form>
 
         <div class="glass p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between animate-in" style="--i: 3">
@@ -180,8 +188,49 @@
       <input id="editName" class="field w-full mt-2" maxlength="40" />
       <div class="text-xs font-bold uppercase tracking-wider text-muted mt-5">Категория</div>
       <div id="editCategoryPicker" class="flex flex-wrap gap-2 mt-2" role="radiogroup" aria-label="Категория"></div>
+      <div class="text-xs font-bold uppercase tracking-wider text-muted mt-5">Отслеживать</div>
+      <div class="flex flex-wrap items-center gap-3 mt-2">
+        <div id="editTypePicker" class="flex flex-wrap gap-2" role="radiogroup" aria-label="Как отслеживать"></div>
+        <label id="editGoalWrap" class="hidden flex items-center gap-2 text-sm font-semibold">
+          <span class="text-muted">цель в день</span>
+          <select id="editGoal" class="field select"></select>
+        </label>
+      </div>
       <div class="flex gap-3 mt-6">
         <button type="button" id="editDelete" class="pill-btn text-red-500">🗑️ Удалить</button>
+        <button type="button" class="pill-btn flex-1" data-close>Отмена</button>
+        <button type="submit" class="btn-primary flex-1 !py-2.5">Сохранить</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Модалка: ввод времени -->
+  <div id="timeModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <form id="timeForm" class="modal-panel glass" role="dialog" aria-modal="true" aria-labelledby="timeTitle" autocomplete="off">
+      <div class="text-4xl mb-2">⏱️</div>
+      <h3 id="timeTitle" class="text-lg font-bold break-words"></h3>
+      <p id="timeDate" class="text-sm text-muted mt-1"></p>
+
+      <div class="flex justify-center items-end gap-3 mt-6">
+        <label class="time-field">
+          <input id="timeHours" type="number" min="0" max="24" inputmode="numeric" class="field time-input" />
+          <span>часов</span>
+        </label>
+        <span class="text-3xl font-extrabold pb-8 text-muted">:</span>
+        <label class="time-field">
+          <input id="timeMinutes" type="number" min="0" max="59" step="5" inputmode="numeric" class="field time-input" />
+          <span>минут</span>
+        </label>
+      </div>
+
+      <div id="timeQuick" class="flex flex-wrap justify-center gap-2 mt-4"></div>
+
+      <div class="mini-bar mt-6"><span id="timeGoalBar"></span></div>
+      <p id="timeGoalText" class="text-xs text-muted font-semibold mt-2"></p>
+
+      <div class="flex gap-3 mt-6">
+        <button type="button" id="timeClear" class="pill-btn">Сбросить</button>
         <button type="button" class="pill-btn flex-1" data-close>Отмена</button>
         <button type="submit" class="btn-primary flex-1 !py-2.5">Сохранить</button>
       </div>

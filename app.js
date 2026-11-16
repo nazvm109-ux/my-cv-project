@@ -16,6 +16,15 @@
     mind: { label: 'Осознанность', icon: '🧘', color: '#f472b6' },
   };
 
+  // Как отслеживается привычка
+  const TYPES = {
+    check: { label: 'Отметка', icon: '✓', color: '#a78bfa' },
+    time: { label: 'Время', icon: '⏱', color: '#60a5fa' },
+  };
+  // Варианты дневной цели для «времени», в минутах
+  const GOALS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240];
+  const QUICK_ADD = [5, 15, 30, 60];
+
   // [минимальный уровень, название, иконка]
   const RANKS = [
     [1, 'Новичок', '🌱'],
@@ -28,12 +37,14 @@
 
   const AVATARS = ['🦊', '🐼', '🐯', '🦄', '🐸', '🐙', '🦉', '🐲', '🐱', '🐻', '🐧', '🦁'];
 
+  // [название, категория, тип, цель в минутах]
   const SUGGESTIONS = [
-    ['Пить 2 литра воды', 'health'],
-    ['Утренняя зарядка', 'sport'],
-    ['Читать 20 минут', 'learning'],
-    ['Медитация 10 минут', 'mind'],
-    ['Планировать день', 'productivity'],
+    ['Пить 2 литра воды', 'health', 'check', 30],
+    ['Утренняя зарядка', 'sport', 'check', 30],
+    ['Чтение', 'learning', 'time', 20],
+    ['Медитация', 'mind', 'time', 10],
+    ['Учёба', 'learning', 'time', 60],
+    ['Планировать день', 'productivity', 'check', 30],
   ];
 
   const QUOTES = [
@@ -66,6 +77,21 @@
     if (m10 === 1 && m100 !== 11) return one;
     if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
     return many;
+  };
+
+  // 90 → «1 ч 30 мин»
+  const fmtMin = (m) => {
+    if (m < 60) return `${m} мин`;
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return r ? `${h} ч ${r} мин` : `${h} ч`;
+  };
+  // 90 → «1ч30» (для маленьких ячеек)
+  const fmtShort = (m) => {
+    if (m < 60) return `${m}м`;
+    const h = Math.floor(m / 60);
+    const r = m % 60;
+    return r ? `${h}ч${String(r).padStart(2, '0')}` : `${h}ч`;
   };
 
   const restartAnimation = (el, cls) => {
@@ -109,7 +135,16 @@
         ...def,
         ...s,
         profile: { ...def.profile, ...(s.profile || {}) },
-        habits: Array.isArray(s.habits) ? s.habits.filter((h) => h && h.id && Array.isArray(h.done)) : [],
+        habits: Array.isArray(s.habits)
+          ? s.habits
+              .filter((h) => h && h.id && Array.isArray(h.done))
+              .map((h) => ({
+                ...h,
+                type: h.type === 'time' ? 'time' : 'check',
+                goal: Number(h.goal) > 0 ? Number(h.goal) : 30,
+                minutes: h.minutes && typeof h.minutes === 'object' ? h.minutes : {},
+              }))
+          : [],
       };
     } catch {
       return defaultState();
@@ -132,11 +167,22 @@
     pendingDelete: null,
     editing: null,
     editCategory: 'health',
+    newType: 'check',
+    editType: 'check',
+    timeTarget: null, // { id, key } — день, для которого вводим время
   };
 
   // ---------- Статистика и опыт ----------
   const totalChecks = () => state.habits.reduce((s, h) => s + h.done.length, 0);
-  const totalXP = () => totalChecks() * XP_PER_CHECK;
+  const minutesOf = (h) => (h.type === 'time' ? Object.values(h.minutes).reduce((a, b) => a + b, 0) : 0);
+  // 10 XP за выполненный день + для «времени» 1 XP за каждые 10 минут
+  const habitXP = (h) => h.done.length * XP_PER_CHECK + Math.floor(minutesOf(h) / 10);
+  const totalXP = () => state.habits.reduce((s, h) => s + habitXP(h), 0);
+
+  // Для привычек «на время» день выполнен, когда набрана дневная цель
+  function syncDone(h) {
+    h.done = Object.keys(h.minutes).filter((k) => h.minutes[k] >= h.goal);
+  }
   const xpForLevel = (level) => 100 + (level - 1) * 50; // сколько XP нужно для перехода на следующий уровень
 
   function levelInfo(xp) {
@@ -281,14 +327,23 @@
   }
 
   // ---------- Рендер: форма, фильтры, панель ----------
-  function renderCategoryPicker() {
-    $('#categoryPicker').innerHTML = Object.entries(CATEGORIES)
+  // Ряд чипов-переключателей: категории или типы
+  const chipsHtml = (items, current, attr) =>
+    Object.entries(items)
       .map(
-        ([key, c]) => `<button type="button" class="chip ${key === ui.newCategory ? 'active' : ''}"
-          data-cat="${key}" role="radio" aria-checked="${key === ui.newCategory}" style="--c:${c.color}">
+        ([key, c]) => `<button type="button" class="chip ${key === current ? 'active' : ''}"
+          data-${attr}="${key}" role="radio" aria-checked="${key === current}" style="--c:${c.color}">
           <span>${c.icon}</span>${c.label}</button>`,
       )
       .join('');
+
+  const goalOptions = (selected) =>
+    GOALS.map((g) => `<option value="${g}" ${g === selected ? 'selected' : ''}>${fmtMin(g)}</option>`).join('');
+
+  function renderCategoryPicker() {
+    $('#categoryPicker').innerHTML = chipsHtml(CATEGORIES, ui.newCategory, 'cat');
+    $('#typePicker').innerHTML = chipsHtml(TYPES, ui.newType, 'type');
+    $('#goalWrap').classList.toggle('hidden', ui.newType !== 'time');
   }
 
   function renderFilters() {
@@ -322,12 +377,24 @@
     const key = toKey(d);
     const done = set.has(key);
     const future = key > today;
-    const label = `${d.getDate()} ${MONTHS_GEN[d.getMonth()]}: ${done ? 'выполнено' : 'не выполнено'}`;
-    return `<button type="button" class="day-cell ${done ? 'is-done' : ''} ${key === today ? 'is-today' : ''}"
+    const isTime = h.type === 'time';
+    const mins = isTime ? h.minutes[key] || 0 : 0;
+    const dateText = `${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`;
+    const label = isTime
+      ? `${dateText}: ${mins ? fmtMin(mins) : 'нет времени'} из ${fmtMin(h.goal)}`
+      : `${dateText}: ${done ? 'выполнено' : 'не выполнено'}`;
+
+    let inner;
+    if (isTime && mins && showDow) inner = `<span class="num time">${fmtShort(mins)}</span>`;
+    else if (done && showDow) inner = checkSvg;
+    else inner = `<span class="num">${d.getDate()}</span>`;
+
+    return `<button type="button" class="day-cell ${done ? 'is-done' : ''} ${key === today ? 'is-today' : ''} ${isTime ? 'is-time' : ''}"
       data-id="${h.id}" data-date="${key}" ${future ? 'disabled' : ''}
-      aria-pressed="${done}" aria-label="${label}" title="${label}">
+      ${isTime ? `style="--p:${Math.min(1, mins / h.goal)}"` : `aria-pressed="${done}"`}
+      aria-label="${label}" title="${label}">
       ${showDow ? `<span class="dow">${WEEKDAYS[weekdayIdx(d)]}</span>` : ''}
-      ${done && showDow ? checkSvg : `<span class="num">${d.getDate()}</span>`}
+      ${inner}
     </button>`;
   }
 
@@ -340,6 +407,9 @@
     const eligible = days.filter((d) => toKey(d) <= today);
     const doneCount = eligible.filter((d) => set.has(toKey(d))).length;
     const pct = eligible.length ? Math.round((doneCount / eligible.length) * 100) : 0;
+    const isTime = h.type === 'time';
+    const periodMinutes = isTime ? days.reduce((s, d) => s + (h.minutes[toKey(d)] || 0), 0) : 0;
+    const periodWord = state.view === 'week' ? 'за неделю' : 'за месяц';
 
     let grid;
     if (state.view === 'week') {
@@ -361,11 +431,12 @@
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-muted font-semibold">
             <span class="cat-tag">${cat.label}</span>
             <span class="whitespace-nowrap"><span class="flame ${streak ? 'lit' : ''}">🔥</span> ${streak} ${plural(streak, 'день', 'дня', 'дней')}</span>
+            ${isTime ? `<span class="whitespace-nowrap">⏱ цель ${fmtMin(h.goal)}/день</span>` : ''}
           </div>
         </div>
-        <div class="text-right shrink-0 hidden sm:block">
-          <div class="text-lg font-extrabold leading-none">${pct}%</div>
-          <div class="text-[10px] text-muted font-semibold mt-1">${state.view === 'week' ? 'за неделю' : 'за месяц'}</div>
+        <div class="text-right shrink-0 ${isTime ? '' : 'hidden sm:block'}">
+          <div class="text-lg font-extrabold leading-none">${isTime ? fmtShort(periodMinutes) : `${pct}%`}</div>
+          <div class="text-[10px] text-muted font-semibold mt-1">${periodWord}</div>
         </div>
         <div class="card-actions">
           <button type="button" class="action-btn edit" data-edit="${h.id}" title="Изменить" aria-label="Изменить «${esc(h.name)}»">
@@ -391,8 +462,8 @@
         <p class="text-sm text-muted mt-1">Добавьте свою или начните с готовой:</p>
         <div class="flex flex-wrap justify-center gap-2 mt-5">
           ${SUGGESTIONS.map(
-            ([name, cat]) => `<button type="button" class="chip" style="--c:${CATEGORIES[cat].color}"
-              data-suggest="${esc(name)}" data-cat-s="${cat}">${CATEGORIES[cat].icon} ${esc(name)}</button>`,
+            ([name, cat, type, goal], i) => `<button type="button" class="chip" style="--c:${CATEGORIES[cat].color}"
+              data-suggest="${i}">${CATEGORIES[cat].icon} ${esc(name)}${type === 'time' ? ` · ⏱ ${fmtMin(goal)}` : ''}</button>`,
           ).join('')}
         </div>
       </div>`;
@@ -498,8 +569,8 @@
   }
 
   // ---------- Действия ----------
-  function addHabit(name, category) {
-    const h = { id: uid(), name, category, createdAt: todayKey(), done: [] };
+  function addHabit(name, category, type = 'check', goal = 30) {
+    const h = { id: uid(), name, category, type, goal, minutes: {}, createdAt: todayKey(), done: [] };
     state.habits.push(h);
     save();
     if (ui.filter !== 'all' && ui.filter !== category) ui.filter = 'all';
@@ -509,35 +580,53 @@
     toast(`Привычка «${name}» добавлена`, CATEGORIES[category].icon);
   }
 
-  function toggleDay(id, key, cellEl) {
+  const cellOf = (id, key) => $(`.day-cell[data-id="${id}"][data-date="${key}"]`);
+
+  // Клик по дню: «отметка» переключается сразу, для «времени» открывается окно ввода
+  function onDayClick(id, key, cellEl) {
     const h = state.habits.find((x) => x.id === id);
     if (!h || key > todayKey()) return;
+    if (h.type === 'time') return openTime(h, key);
+    applyChange(h, key, cellEl.getBoundingClientRect(), () => {
+      const idx = h.done.indexOf(key);
+      if (idx === -1) h.done.push(key);
+      else h.done.splice(idx, 1);
+    });
+  }
 
-    const rect = cellEl.getBoundingClientRect();
-    const levelBefore = levelInfo(totalXP()).level;
-    const idx = h.done.indexOf(key);
-    const checking = idx === -1;
-    if (checking) h.done.push(key);
-    else h.done.splice(idx, 1);
+  // Общий путь для любого изменения дня: сохранение, перерисовка, эффекты и уровни
+  function applyChange(h, key, rect, mutate) {
+    const xpBefore = totalXP();
+    const levelBefore = levelInfo(xpBefore).level;
+    const wasDone = h.done.includes(key);
+    const minsBefore = h.minutes[key] || 0;
+    mutate();
     save();
+
+    const isDone = h.done.includes(key);
+    const checking = !wasDone && isDone;
+    const unchecking = wasDone && !isDone;
+    const xpDelta = totalXP() - xpBefore;
 
     renderHabits();
     renderFilters();
-    const newCell = $(`.day-cell[data-id="${id}"][data-date="${key}"]`);
+    const newCell = cellOf(h.id, key);
     if (newCell) {
-      newCell.classList.add(checking ? 'just-checked' : 'just-unchecked');
+      if (checking || (h.type === 'time' && (h.minutes[key] || 0) > minsBefore)) newCell.classList.add('just-checked');
+      else if (unchecking || (h.minutes[key] || 0) < minsBefore) newCell.classList.add('just-unchecked');
       newCell.focus({ preventScroll: true });
+      rect = newCell.getBoundingClientRect();
     }
 
     const color = (CATEGORIES[h.category] || CATEGORIES.health).color;
     const levelAfter = levelInfo(totalXP()).level;
 
-    if (checking) {
-      burst(rect, color);
-      floatText(rect, `+${XP_PER_CHECK} XP`);
+    if (checking) burst(rect, color);
+    if (xpDelta > 0) {
+      floatText(rect, `+${xpDelta} XP`);
       glowXP();
-    } else {
-      floatText(rect, `−${XP_PER_CHECK} XP`, true);
+    } else if (xpDelta < 0) {
+      floatText(rect, `−${-xpDelta} XP`, true);
     }
 
     if (levelAfter > levelBefore) {
@@ -563,14 +652,60 @@
     }
   }
 
+  // ---------- Окно ввода времени ----------
+  const timeValue = () =>
+    Math.max(0, Math.min(24 * 60, (parseInt($('#timeHours').value, 10) || 0) * 60 + (parseInt($('#timeMinutes').value, 10) || 0)));
+
+  function setTimeInputs(total) {
+    total = Math.max(0, Math.min(24 * 60, total));
+    $('#timeHours').value = Math.floor(total / 60);
+    $('#timeMinutes').value = total % 60;
+    updateTimePreview();
+  }
+
+  function updateTimePreview() {
+    const h = state.habits.find((x) => x.id === (ui.timeTarget && ui.timeTarget.id));
+    if (!h) return;
+    const m = timeValue();
+    const p = Math.min(1, m / h.goal);
+    $('#timeGoalBar').style.width = `${p * 100}%`;
+    $('#timeGoalText').textContent =
+      m >= h.goal ? `🎯 Цель достигнута: ${fmtMin(m)} из ${fmtMin(h.goal)}` : `${m ? fmtMin(m) : '0 мин'} из ${fmtMin(h.goal)}`;
+  }
+
+  function openTime(h, key) {
+    ui.timeTarget = { id: h.id, key };
+    const d = fromKey(key);
+    const cat = CATEGORIES[h.category] || CATEGORIES.health;
+    $('#timeForm').style.setProperty('--c', cat.color);
+    $('#timeTitle').textContent = h.name;
+    $('#timeDate').textContent = `${key === todayKey() ? 'Сегодня, ' : ''}${d.getDate()} ${MONTHS_GEN[d.getMonth()]} · цель ${fmtMin(h.goal)}`;
+    $('#timeQuick').innerHTML = QUICK_ADD.map((m) => `<button type="button" class="chip" style="--c:${cat.color}" data-add="${m}">+${fmtMin(m)}</button>`).join('');
+    setTimeInputs(h.minutes[key] || 0);
+    openModal('#timeModal');
+    setTimeout(() => $('#timeMinutes').select(), 60);
+  }
+
+  function saveTime(total) {
+    const t = ui.timeTarget;
+    const h = t && state.habits.find((x) => x.id === t.id);
+    closeModal($('#timeModal'));
+    if (!h) return;
+    const cell = cellOf(h.id, t.key);
+    const rect = cell ? cell.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
+    if ((h.minutes[t.key] || 0) === total) return;
+    applyChange(h, t.key, rect, () => {
+      if (total > 0) h.minutes[t.key] = total;
+      else delete h.minutes[t.key];
+      syncDone(h);
+    });
+  }
+
+  // ---------- Редактирование ----------
   function renderEditCategories() {
-    $('#editCategoryPicker').innerHTML = Object.entries(CATEGORIES)
-      .map(
-        ([key, c]) => `<button type="button" class="chip ${key === ui.editCategory ? 'active' : ''}"
-          data-cat="${key}" role="radio" aria-checked="${key === ui.editCategory}" style="--c:${c.color}">
-          <span>${c.icon}</span>${c.label}</button>`,
-      )
-      .join('');
+    $('#editCategoryPicker').innerHTML = chipsHtml(CATEGORIES, ui.editCategory, 'cat');
+    $('#editTypePicker').innerHTML = chipsHtml(TYPES, ui.editType, 'type');
+    $('#editGoalWrap').classList.toggle('hidden', ui.editType !== 'time');
   }
 
   function openEdit(id) {
@@ -578,7 +713,9 @@
     if (!h) return;
     ui.editing = id;
     ui.editCategory = CATEGORIES[h.category] ? h.category : 'health';
+    ui.editType = h.type;
     $('#editName').value = h.name;
+    $('#editGoal').innerHTML = goalOptions(h.goal);
     renderEditCategories();
     openModal('#editModal');
     setTimeout(() => $('#editName').select(), 60);
@@ -596,11 +733,26 @@
     }
     h.name = name;
     h.category = ui.editCategory;
+    if (ui.editType === 'time') {
+      const goal = Number($('#editGoal').value) || 30;
+      if (h.type !== 'time') {
+        // Уже отмеченные дни считаем выполненными: записываем им время, равное цели
+        for (const k of h.done) if (!h.minutes[k]) h.minutes[k] = goal;
+      }
+      h.type = 'time';
+      h.goal = goal;
+      syncDone(h);
+    } else {
+      h.type = 'check';
+    }
+    const levelBefore = Number($('#levelBadge').textContent);
     save();
     closeModal($('#editModal'));
     if (ui.filter !== 'all' && ui.filter !== h.category) ui.filter = 'all';
     renderFilters();
     renderHabits();
+    renderProfile();
+    if (levelInfo(totalXP()).level !== levelBefore) restartAnimation($('#levelBadge'), 'bump');
     toast(`Сохранено: «${name}»`, CATEGORIES[h.category].icon);
   }
 
@@ -654,7 +806,7 @@
         input.focus();
         return;
       }
-      addHabit(name, ui.newCategory);
+      addHabit(name, ui.newCategory, ui.newType, Number($('#habitGoal').value) || 30);
       input.value = '';
     });
     $('#habitName').addEventListener('animationend', (e) => e.target.classList.remove('shake'));
@@ -663,6 +815,12 @@
       const btn = e.target.closest('[data-cat]');
       if (!btn) return;
       ui.newCategory = btn.dataset.cat;
+      renderCategoryPicker();
+    });
+    $('#typePicker').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-type]');
+      if (!btn) return;
+      ui.newType = btn.dataset.type;
       renderCategoryPicker();
     });
 
@@ -677,14 +835,29 @@
     // Клики по карточкам привычек
     $('#habitList').addEventListener('click', (e) => {
       const cell = e.target.closest('.day-cell');
-      if (cell && !cell.disabled) return toggleDay(cell.dataset.id, cell.dataset.date, cell);
+      if (cell && !cell.disabled) return onDayClick(cell.dataset.id, cell.dataset.date, cell);
       const del = e.target.closest('[data-delete]');
       if (del) return requestDelete(del.dataset.delete);
       const edit = e.target.closest('[data-edit]');
       if (edit) return openEdit(edit.dataset.edit);
       const sug = e.target.closest('[data-suggest]');
-      if (sug) addHabit(sug.dataset.suggest, sug.dataset.catS);
+      if (sug) {
+        const [name, cat, type, goal] = SUGGESTIONS[Number(sug.dataset.suggest)];
+        addHabit(name, cat, type, goal);
+      }
     });
+
+    // Окно ввода времени
+    $('#timeForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveTime(timeValue());
+    });
+    $('#timeClear').addEventListener('click', () => saveTime(0));
+    $('#timeQuick').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-add]');
+      if (btn) setTimeInputs(timeValue() + Number(btn.dataset.add));
+    });
+    ['#timeHours', '#timeMinutes'].forEach((s) => $(s).addEventListener('input', updateTimePreview));
 
     // Вид и навигация
     $('#viewToggle').addEventListener('click', (e) => {
@@ -745,6 +918,12 @@
       const btn = e.target.closest('[data-cat]');
       if (!btn) return;
       ui.editCategory = btn.dataset.cat;
+      renderEditCategories();
+    });
+    $('#editTypePicker').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-type]');
+      if (!btn) return;
+      ui.editType = btn.dataset.type;
       renderEditCategories();
     });
     $('#editDelete').addEventListener('click', () => {
@@ -810,6 +989,7 @@
   $('#themeIcon').textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
   $('#quote').textContent = `«${QUOTES[Math.floor(Math.random() * QUOTES.length)]}»`;
   setHeaderDate();
+  $('#habitGoal').innerHTML = goalOptions(30);
   bindEvents();
   renderAll();
 })();
